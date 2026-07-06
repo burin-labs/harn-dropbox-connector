@@ -1,0 +1,65 @@
+[package]
+name = "harn-dropbox-connector"
+version = "0.1.0"
+description = "Pure-Harn Dropbox connector for file artifacts, webhooks, polling, and outbound API dispatch."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/burin-labs/harn-dropbox-connector"
+harn = ">=0.9,<0.10"
+docs_url = "README.md"
+provenance = "https://github.com/burin-labs/harn-dropbox-connector/releases/tag/v0.1.0"
+
+[exports]
+default = "src/lib.harn"
+
+[[providers]]
+id = "dropbox"
+connector = { harn = "src/lib.harn" }
+capabilities = ["webhook", "oauth", "pagination"]
+
+[providers.oauth]
+authorization_endpoint = "https://www.dropbox.com/oauth2/authorize"
+token_endpoint = "https://api.dropboxapi.com/oauth2/token"
+scopes = "files.metadata.read files.content.read files.content.write"
+token_endpoint_auth_method = "client_secret_post"
+
+[providers.setup]
+auth_type = "oauth2"
+flow = "browser"
+required_scopes = ["files.metadata.read", "files.content.read", "files.content.write"]
+required_secrets = ["dropbox/access-token", "dropbox/app-secret"]
+setup_command = ["harn", "connect", "dropbox"]
+validation_command = ["harn", "connect", "status", "--connector", "dropbox", "--json"]
+
+[[providers.setup.health_checks]]
+id = "access-token"
+kind = "secret"
+secret = "dropbox/access-token"
+
+[[providers.setup.health_checks]]
+id = "app-secret"
+kind = "secret"
+secret = "dropbox/app-secret"
+
+[providers.setup.recovery]
+missing_auth = "Store dropbox/access-token before enabling Dropbox bindings."
+expired_credentials = "Refresh the OAuth access token and rerun Dropbox validation."
+revoked_credentials = "Reauthorize Dropbox and replace dropbox/access-token."
+missing_scopes = "Grant Dropbox file metadata/content scopes required by the configured artifact workflow."
+inaccessible_resource = "Confirm the selected Dropbox path is visible to the authorized account."
+transient_provider_outage = "Retry after Dropbox API and webhook delivery are healthy."
+
+[dependencies]
+
+[connector_contract]
+version = 1
+
+[[connector_contract.fixtures]]
+provider = "dropbox"
+name = "list-folder account change webhook"
+kind = "webhook"
+metadata = { app_secret = "fixture-secret", binding_id = "dropbox.list-folder.webhook" }
+body = "{\"list_folder\":{\"accounts\":[\"dbid:acct_123\"]}}"
+headers = { "x-dropbox-signature" = "57b2a787d0659ddd2d6b041106a062b2dd4e9c3b34545b75fdc74b1cd5af4834" }
+expect_type = "event"
+expect_kind = "dropbox.list_folder.account_changed"
+expect_event_count = 1

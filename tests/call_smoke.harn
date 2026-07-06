@@ -1,0 +1,139 @@
+import {
+  artifact_export_request,
+  artifact_import_request,
+  call,
+  init,
+  request_descriptor,
+  shutdown,
+} from "../src/lib"
+import { expect, expect_eq } from "./assertions"
+
+pipeline default() {
+  egress_policy({allow: ["api.dropboxapi.com", "content.dropboxapi.com"], default: "deny"})
+  shutdown()
+  init({access_token: "secret_access"})
+  http_mock_clear()
+  let api = "https://api.dropboxapi.com/2"
+  let content = "https://content.dropboxapi.com/2"
+  http_mock(
+    "*",
+    "https://api.dropboxapi.com/*",
+    {
+      responses: [
+        {
+          status: 200,
+          body: "{\".tag\":\"file\",\"id\":\"id:report\",\"name\":\"Report.docx\",\"path_lower\":\"/reports/report.docx\"}",
+          headers: {},
+        },
+        {
+          status: 200,
+          body: "{\"entries\":[{\".tag\":\"file\",\"id\":\"id:report\",\"name\":\"Report.docx\",\"path_lower\":\"/reports/report.docx\"}],\"cursor\":\"cursor_1\",\"has_more\":false}",
+          headers: {},
+        },
+        {status: 200, body: "{\"entries\":[],\"cursor\":\"cursor_2\",\"has_more\":false}", headers: {}},
+      ],
+    },
+  )
+  http_mock(
+    "*",
+    "https://content.dropboxapi.com/*",
+    {
+      responses: [
+        {
+          status: 200,
+          body: "DOCX-BYTES",
+          headers: {
+            "Dropbox-API-Result": "{\".tag\":\"file\",\"id\":\"id:report\",\"name\":\"Report.docx\",\"path_lower\":\"/reports/report.docx\"}",
+          },
+        },
+        {
+          status: 200,
+          body: "PDF-BYTES",
+          headers: {
+            "Dropbox-API-Result": "{\".tag\":\"file\",\"id\":\"id:report\",\"name\":\"Report.pdf\",\"path_lower\":\"/reports/report.docx\"}",
+          },
+        },
+        {
+          status: 200,
+          body: "{\".tag\":\"file\",\"id\":\"id:report\",\"name\":\"Report.docx\",\"path_lower\":\"/reports/report.docx\"}",
+          headers: {},
+        },
+      ],
+    },
+  )
+  let file = call("files.get_metadata", {path: "/Reports/Report.docx"})
+  expect_eq(file.id, "id:report", "metadata response")
+  call("files.list_folder", {path: "/Reports", recursive: true, limit: 10})
+  call("files.list_folder.continue", {cursor: "cursor_1"})
+  let downloaded = call("files.download", {path: "/Reports/Report.docx"})
+  expect_eq(downloaded.bytes, "DOCX-BYTES", "download bytes response")
+  expect_eq(downloaded.metadata.id, "id:report", "download metadata")
+  let exported = call("files.export", {path: "/Reports/Report.docx"})
+  expect_eq(exported.bytes, "PDF-BYTES", "export bytes response")
+  let upload_rejected = call("files.upload", {path: "/Reports/Report.docx", content: "doc bytes"})
+  expect(is_err(upload_rejected), "mutating Dropbox upload requires approval")
+  expect_eq(unwrap_err(upload_rejected).code, "approval_required", "approval code")
+  call("files.upload", {path: "/Reports/Report.docx", content: "doc bytes", _approved: true})
+  let calls = http_mock_calls({include_sensitive: true})
+  expect_eq(len(calls), 6, "all expected outbound methods dispatched")
+  expect_eq(calls[0].method, "POST", "metadata uses POST")
+  expect_eq(calls[0].url, api + "/files/get_metadata", "metadata URL")
+  expect_eq(calls[0].headers.authorization, "Bearer secret_access", "authorization header sent")
+  expect(calls[0].body.contains("\"path\":\"/Reports/Report.docx\""), "metadata body path")
+  expect_eq(calls[1].url, api + "/files/list_folder", "list folder URL")
+  expect(calls[1].body.contains("\"recursive\":true"), "list folder body")
+  expect_eq(calls[2].url, api + "/files/list_folder/continue", "continue URL")
+  expect_eq(calls[3].url, content + "/files/download", "download URL")
+  expect(
+    __text(calls[3].headers.get("dropbox-api-arg") ?? calls[3].headers.get("Dropbox-API-Arg"))
+      .contains("/Reports/Report.docx"),
+    "download api arg",
+  )
+  expect_eq(calls[4].url, content + "/files/export", "export URL")
+  expect_eq(calls[5].method, "POST", "upload method")
+  expect_eq(calls[5].url, content + "/files/upload", "upload URL")
+  expect_eq(calls[5].headers.get("content-type"), "application/octet-stream", "upload content type")
+  expect_eq(calls[5].body, "doc bytes", "raw upload body is preserved")
+  let export = artifact_export_request({path: "/Reports/Report.docx", format: "pdf", name: "report"})
+  expect_eq(export.kind, "artifact_export", "export descriptor kind")
+  expect_eq(export.method, "POST", "export descriptor method")
+  expect_eq(export.artifact.mime_type, "application/pdf", "export artifact mime")
+  expect_eq(
+    export.headers["Dropbox-API-Arg"],
+    "{\"path\":\"/Reports/Report.docx\"}",
+    "export api arg",
+  )
+  let import_request = artifact_import_request(
+    {
+      path: "/Reports/Report.docx",
+      name: "report.docx",
+      uri: "artifact://session/report.docx",
+      mime_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    },
+  )
+  expect_eq(import_request.kind, "artifact_import", "import descriptor kind")
+  expect_eq(import_request.method, "POST", "import method")
+  expect_eq(import_request.media.uri, "artifact://session/report.docx", "import media uri")
+  let descriptor = request_descriptor("files.export", {access_token: "secret_access", path: "/Reports/Report.docx"})
+  expect(!is_err(descriptor), "export request descriptor builds")
+  expect_eq(unwrap(descriptor).url, content + "/files/export", "export request URL")
+  let bad_host = call(
+    "files.get_metadata",
+    {
+      path: "/Reports/Report.docx",
+      access_token: "secret_access",
+      api_base_url: "https://evil.example/2",
+    },
+  )
+  expect(is_err(bad_host), "disallowed api_base_url rejected")
+  expect_eq(unwrap_err(bad_host).code, "disallowed_api_base_url", "disallowed host code")
+  http_mock_clear()
+  shutdown()
+}
+
+fn __text(value) {
+  if value == nil {
+    return ""
+  }
+  return trim(to_string(value))
+}

@@ -1,0 +1,41 @@
+import { init, normalize_inbound, shutdown } from "../src/lib"
+import { expect, expect_eq } from "./assertions"
+import { assert_dropbox_interface, dropbox_webhook_body } from "./helpers"
+
+pipeline default() {
+  let secret = "test-secret"
+  assert_dropbox_interface()
+  let challenge = normalize_inbound({query: {challenge: "dropbox-challenge"}})
+  expect_eq(challenge.type, "response", "challenge returns response envelope")
+  expect_eq(challenge.response.status, 200, "challenge status")
+  expect_eq(challenge.response.body, "dropbox-challenge", "challenge body")
+  expect_eq(
+    challenge.response.headers["X-Content-Type-Options"],
+    "nosniff",
+    "challenge has nosniff header",
+  )
+  let body = dropbox_webhook_body()
+  let signature = hmac_sha256(secret, body)
+  let event = normalize_inbound(
+    {app_secret: secret, body_text: body, headers: {"x-dropbox-signature": signature}},
+  )
+  expect_eq(event.type, "event", "Dropbox webhook envelope type")
+  expect_eq(event.event.kind, "dropbox.list_folder.account_changed", "Dropbox event kind")
+  expect_eq(event.event.signature_status.state, "verified", "signature verified")
+  expect_eq(event.event.payload.provider, "dropbox", "payload provider")
+  expect_eq(event.event.payload.account_id, "dbid:acct_123", "account id")
+  expect(event.event.dedupe_key.contains("dbid:acct_123"), "dedupe key includes account")
+  expect_eq(event.event.source_refs[0].kind, "account", "source ref kind")
+  shutdown()
+  let unsigned = normalize_inbound({body: dropbox_webhook_body(["dbid:acct_456"])})
+  expect_eq(unsigned.type, "event", "unsigned webhook can be accepted when no app secret configured")
+  expect_eq(unsigned.event.signature_status.state, "unsigned", "unsigned state")
+  init({app_secret: secret})
+  let bad_signature = normalize_inbound({body_text: body, headers: {"x-dropbox-signature": hmac_sha256("wrong", body)}})
+  expect_eq(bad_signature.type, "reject", "wrong signature rejects")
+  expect_eq(bad_signature.reject.status, 401, "wrong signature status")
+  let missing = normalize_inbound({body_text: "{}", headers: {"x-dropbox-signature": hmac_sha256(secret, "{}")}})
+  expect_eq(missing.type, "reject", "missing accounts rejects")
+  expect_eq(missing.reject.status, 400, "missing accounts status")
+  shutdown()
+}

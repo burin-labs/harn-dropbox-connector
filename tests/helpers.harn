@@ -1,0 +1,30 @@
+import { activate, init, kinds, payload_schema, provider_id, shutdown } from "../src/lib"
+
+/** Assert the exported connector lifecycle/interface surface. */
+pub fn assert_dropbox_interface() {
+  shutdown()
+  require provider_id() == "dropbox", "provider id"
+  require kinds() == ["webhook", "poll"], "supported kinds"
+  require payload_schema().harn_schema_name == "DropboxEventPayload", "payload schema name"
+  let initialized = init({app_secret: "test-secret", access_token: "secret_access"})
+  require initialized.initialized, "init stores state"
+  let activated = activate(
+    [
+      {
+        id: "dropbox.webhook",
+        kind: "webhook",
+        path: "/hooks/dropbox",
+        secrets: {app_secret: "test-secret"},
+      },
+      {id: "dropbox.list_folder", kind: "poll", poll: {path: "/Reports"}, access_token: "secret_access"},
+    ],
+  )
+  require activated.bindings == 2, "activate counts bindings"
+  require activated.webhook_bindings == 1, "activate counts webhook bindings"
+  require activated.poll_bindings == 1, "activate counts poll bindings"
+}
+
+/** Build a Dropbox list-folder webhook body. */
+pub fn dropbox_webhook_body(accounts = nil) {
+  return json_stringify({list_folder: {accounts: accounts ?? ["dbid:acct_123"]}})
+}

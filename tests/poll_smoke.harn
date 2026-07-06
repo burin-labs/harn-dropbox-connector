@@ -1,0 +1,134 @@
+import { init, poll_tick, shutdown } from "../src/lib"
+import { expect, expect_eq } from "./assertions"
+
+fn poll_ctx(cursor = nil, state = nil, extra = nil) {
+  return {
+    provider_id: "dropbox",
+    binding_id: "dropbox.list_folder",
+    tick_at: "2026-07-06T12:00:00Z",
+    cursor: cursor,
+    state: state,
+    max_batch_size: 10,
+    binding: {
+      id: "dropbox.list_folder",
+      kind: "poll",
+      config: {poll: {path: "/Reports", recursive: true}, access_token: "secret_access"},
+    },
+  }
+    + (extra ?? {})
+}
+
+fn list_body(entries, cursor, has_more = false) {
+  return json_stringify({entries: entries, cursor: cursor, has_more: has_more})
+}
+
+fn file_entry(id, path, modified) {
+  return {
+    ".tag": "file",
+    id: id,
+    name: path.split("/")[len(path.split("/")) - 1],
+    path_lower: lowercase(path),
+    path_display: path,
+    server_modified: modified,
+    rev: "rev-" + id,
+    size: 42,
+  }
+}
+
+fn deleted_entry(path) {
+  return {
+    ".tag": "deleted",
+    name: path.split("/")[len(path.split("/")) - 1],
+    path_lower: lowercase(path),
+    path_display: path,
+  }
+}
+
+pipeline default() {
+  egress_policy({allow: ["api.dropboxapi.com"], default: "deny"})
+  shutdown()
+  init({access_token: "secret_access"})
+  http_mock_clear()
+  let api = "https://api.dropboxapi.com/2"
+  http_mock(
+    "POST",
+    "https://api.dropboxapi.com/*",
+    {
+      responses: [
+        {
+          status: 200,
+          body: list_body(
+            [file_entry("id_report_1", "/Reports/Report 1.docx", "2026-07-06T11:00:00Z")],
+            "cursor_1",
+            true,
+          ),
+          headers: {},
+        },
+        {
+          status: 200,
+          body: list_body(
+            [file_entry("id_report_2", "/Reports/Report 2.pdf", "2026-07-06T11:05:00Z")],
+            "cursor_2",
+            false,
+          ),
+          headers: {},
+        },
+        {status: 503, body: "{\"error_summary\":\"too_many_requests/...\"}", headers: {}},
+        {
+          status: 200,
+          body: list_body([deleted_entry("/Reports/Report 3.docx")], "cursor_3", false),
+          headers: {},
+        },
+      ],
+    },
+  )
+  let first = poll_tick(poll_ctx())
+  expect_eq(len(first.events), 1, "first tick emits one normalized event")
+  expect_eq(first.events[0].kind, "dropbox.files.item_changed", "poll event kind")
+  expect_eq(first.events[0].payload.path_lower, "/reports/report 1.docx", "poll path")
+  expect_eq(
+    first.events[0].payload.mime_type,
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "poll mime type",
+  )
+  expect_eq(first.cursor.cursor, "cursor_1", "first tick advances cursor")
+  expect_eq(first.cursor.has_more, true, "first tick stores has_more")
+  expect(
+    first.state.poll_cache.get("dropbox.list_folder:/reports/report 1.docx") != nil,
+    "first tick persists snapshot",
+  )
+  let second = poll_tick(poll_ctx(first.cursor, first.state))
+  expect_eq(len(second.events), 1, "second tick emits one changed item")
+  expect_eq(second.events[0].payload.file_id, "id_report_2", "second file id")
+  expect_eq(second.cursor.cursor, "cursor_2", "second tick stores cursor")
+  let failed = poll_tick(poll_ctx(second.cursor, second.state))
+  expect(is_err(failed), "retryable Dropbox failures return Err without advancing local state")
+  expect_eq(unwrap_err(failed).code, "too_many_requests/...", "retry error preserves Dropbox summary")
+  let retried = poll_tick(poll_ctx(second.cursor, second.state))
+  expect_eq(len(retried.events), 1, "retry with same cursor can emit after transient failure")
+  expect_eq(retried.events[0].kind, "dropbox.files.item_removed", "removed kind")
+  expect_eq(retried.events[0].payload.removed, true, "removed payload")
+  let calls = http_mock_calls({include_sensitive: true})
+  expect_eq(len(calls), 4, "one Dropbox request per tick")
+  expect_eq(calls[0].url, api + "/files/list_folder", "first list URL")
+  expect_eq(calls[1].url, api + "/files/list_folder/continue", "continue URL")
+  expect(calls[1].body.contains("\"cursor\":\"cursor_1\""), "continue cursor")
+  expect(calls[3].body.contains("\"cursor\":\"cursor_2\""), "retry cursor")
+  http_mock_clear()
+  http_mock(
+    "POST",
+    api + "/files/list_folder",
+    {
+      status: 200,
+      body: list_body(
+        [file_entry("id_report_1", "/Reports/Report 1.docx", "2026-07-06T11:00:00Z")],
+        "cursor_4",
+        false,
+      ),
+      headers: {},
+    },
+  )
+  let duplicate = poll_tick(poll_ctx(nil, first.state))
+  expect_eq(len(duplicate.events), 0, "persisted state dedupes identical item snapshot")
+  shutdown()
+}
