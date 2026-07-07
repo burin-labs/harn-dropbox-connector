@@ -13,8 +13,8 @@ pipeline default() {
   shutdown()
   init({access_token: "secret_access"})
   http_mock_clear()
-  let api = "https://api.dropboxapi.com/2"
-  let content = "https://content.dropboxapi.com/2"
+  const api = "https://api.dropboxapi.com/2"
+  const content = "https://content.dropboxapi.com/2"
   http_mock(
     "*",
     "https://api.dropboxapi.com/*",
@@ -61,20 +61,20 @@ pipeline default() {
       ],
     },
   )
-  let file = call("files.get_metadata", {path: "/Reports/Report.docx"})
+  const file = call("files.get_metadata", {path: "/Reports/Report.docx"})
   expect_eq(file.id, "id:report", "metadata response")
   call("files.list_folder", {path: "/Reports", recursive: true, limit: 10})
   call("files.list_folder.continue", {cursor: "cursor_1"})
-  let downloaded = call("files.download", {path: "/Reports/Report.docx"})
+  const downloaded = call("files.download", {path: "/Reports/Report.docx"})
   expect_eq(downloaded.bytes, "DOCX-BYTES", "download bytes response")
   expect_eq(downloaded.metadata.id, "id:report", "download metadata")
-  let exported = call("files.export", {path: "/Reports/Report.docx"})
+  const exported = call("files.export", {path: "/Reports/Report.docx"})
   expect_eq(exported.bytes, "PDF-BYTES", "export bytes response")
-  let upload_rejected = call("files.upload", {path: "/Reports/Report.docx", content: "doc bytes"})
+  const upload_rejected = call("files.upload", {path: "/Reports/Report.docx", content: "doc bytes"})
   expect(is_err(upload_rejected), "mutating Dropbox upload requires approval")
   expect_eq(unwrap_err(upload_rejected).code, "approval_required", "approval code")
   call("files.upload", {path: "/Reports/Report.docx", content: "doc bytes", _approved: true})
-  let calls = http_mock_calls({include_sensitive: true})
+  const calls = http_mock_calls({include_sensitive: true})
   expect_eq(len(calls), 6, "all expected outbound methods dispatched")
   expect_eq(calls[0].method, "POST", "metadata uses POST")
   expect_eq(calls[0].url, api + "/files/get_metadata", "metadata URL")
@@ -94,7 +94,7 @@ pipeline default() {
   expect_eq(calls[5].url, content + "/files/upload", "upload URL")
   expect_eq(calls[5].headers.get("content-type"), "application/octet-stream", "upload content type")
   expect_eq(calls[5].body, "doc bytes", "raw upload body is preserved")
-  let export = artifact_export_request({path: "/Reports/Report.docx", format: "pdf", name: "report"})
+  const export = artifact_export_request({path: "/Reports/Report.docx", format: "pdf", name: "report"})
   expect_eq(export.kind, "artifact_export", "export descriptor kind")
   expect_eq(export.method, "POST", "export descriptor method")
   expect_eq(export.artifact.mime_type, "application/pdf", "export artifact mime")
@@ -103,7 +103,7 @@ pipeline default() {
     "{\"path\":\"/Reports/Report.docx\"}",
     "export api arg",
   )
-  let import_request = artifact_import_request(
+  const import_request = artifact_import_request(
     {
       path: "/Reports/Report.docx",
       name: "report.docx",
@@ -114,10 +114,10 @@ pipeline default() {
   expect_eq(import_request.kind, "artifact_import", "import descriptor kind")
   expect_eq(import_request.method, "POST", "import method")
   expect_eq(import_request.media.uri, "artifact://session/report.docx", "import media uri")
-  let descriptor = request_descriptor("files.export", {access_token: "secret_access", path: "/Reports/Report.docx"})
+  const descriptor = request_descriptor("files.export", {access_token: "secret_access", path: "/Reports/Report.docx"})
   expect(!is_err(descriptor), "export request descriptor builds")
   expect_eq(unwrap(descriptor).url, content + "/files/export", "export request URL")
-  let bad_host = call(
+  const bad_host = call(
     "files.get_metadata",
     {
       path: "/Reports/Report.docx",
