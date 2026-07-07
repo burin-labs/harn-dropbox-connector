@@ -1,14 +1,14 @@
-let DROPBOX_PROVIDER_ID = "dropbox"
+const DROPBOX_PROVIDER_ID = "dropbox"
 
-let DROPBOX_API_BASE_URL = "https://api.dropboxapi.com/2"
+const DROPBOX_API_BASE_URL = "https://api.dropboxapi.com/2"
 
-let DROPBOX_CONTENT_BASE_URL = "https://content.dropboxapi.com/2"
+const DROPBOX_CONTENT_BASE_URL = "https://content.dropboxapi.com/2"
 
-let DROPBOX_ALLOWED_API_HOSTS = ["api.dropboxapi.com"]
+const DROPBOX_ALLOWED_API_HOSTS = ["api.dropboxapi.com"]
 
-let DROPBOX_ALLOWED_CONTENT_HOSTS = ["content.dropboxapi.com"]
+const DROPBOX_ALLOWED_CONTENT_HOSTS = ["content.dropboxapi.com"]
 
-let DROPBOX_OUTBOUND_METHODS = [
+const DROPBOX_OUTBOUND_METHODS = [
   "files.get_metadata",
   "files.list_folder",
   "files.list_folder.continue",
@@ -19,9 +19,9 @@ let DROPBOX_OUTBOUND_METHODS = [
   "artifact.import_request",
 ]
 
-let DROPBOX_MUTATING_METHODS = ["files.upload", "artifact.import_request"]
+const DROPBOX_MUTATING_METHODS = ["files.upload", "artifact.import_request"]
 
-var DROPBOX_STATE = {initialized: false, active: false, ctx: {}, webhook_bindings: {}, poll_bindings: {}}
+let DROPBOX_STATE = {initialized: false, active: false, ctx: {}, webhook_bindings: {}, poll_bindings: {}}
 
 /** Return this connector's Harn provider id. */
 pub fn provider_id() {
@@ -35,7 +35,7 @@ pub fn kinds() {
 
 /** Describe outbound methods and which ones mutate provider state. */
 pub fn methods() {
-  var out = []
+  let out = []
   for name in DROPBOX_OUTBOUND_METHODS {
     out = out + [{name: name, requires_approval: contains(DROPBOX_MUTATING_METHODS, name)}]
   }
@@ -76,17 +76,17 @@ pub fn init(ctx = nil) {
 
 /** Activate webhook and poll bindings. */
 pub fn activate(bindings = []) {
-  var webhook_bindings = {}
-  var poll_bindings = {}
-  var seen_paths = {}
+  let webhook_bindings = {}
+  let poll_bindings = {}
+  let seen_paths = {}
   for binding in bindings ?? [] {
-    let binding_id = __text(
+    const binding_id = __text(
       binding?.binding_id ?? binding?.id
         ?? ("binding-" + to_string(len(webhook_bindings.keys()) + len(poll_bindings.keys()))),
     )
-    let kind = __text(binding?.kind ?? "webhook")
+    const kind = __text(binding?.kind ?? "webhook")
     if kind == "webhook" {
-      let path = __text(binding?.path ?? binding?.match?.path)
+      const path = __text(binding?.path ?? binding?.match?.path)
       if path != "" {
         if seen_paths.get(path) {
           return __err("activation", "dropbox connector path `" + path + "` is configured by multiple bindings")
@@ -124,7 +124,7 @@ pub fn shutdown() {
  * `files.list_folder[/continue]` with their stored cursor for file-level facts.
  */
 pub fn normalize_inbound(raw) {
-  let challenge = __text(raw?.challenge ?? raw?.query?.challenge ?? raw?.query_params?.challenge)
+  const challenge = __text(raw?.challenge ?? raw?.query?.challenge ?? raw?.query_params?.challenge)
   if challenge != "" {
     return {
       type: "response",
@@ -135,27 +135,27 @@ pub fn normalize_inbound(raw) {
       },
     }
   }
-  let body_text = __body_text(raw)
-  let verified = __verify_dropbox_signature(raw, body_text)
+  const body_text = __body_text(raw)
+  const verified = __verify_dropbox_signature(raw, body_text)
   if is_err(verified) {
     return __reject(401, unwrap_err(verified).code, unwrap_err(verified).message)
   }
-  let parsed = __body_json(raw)
+  const parsed = __body_json(raw)
   if is_err(parsed) {
     return __reject(400, "invalid_json", "dropbox webhook body must be JSON")
   }
-  let payload = unwrap(parsed)
-  let accounts = payload?.list_folder?.accounts ?? payload?.accounts ?? []
+  const payload = unwrap(parsed)
+  const accounts = payload?.list_folder?.accounts ?? payload?.accounts ?? []
   if len(accounts) == 0 {
     return __reject(400, "missing_accounts", "dropbox webhook body must contain list_folder.accounts")
   }
-  var events = []
+  let events = []
   for account_id in accounts {
-    let account = __text(account_id)
+    const account = __text(account_id)
     if account == "" {
       continue
     }
-    let event = "dropbox.list_folder.account_changed"
+    const event = "dropbox.list_folder.account_changed"
     events = events
       + [
       {
@@ -177,7 +177,7 @@ pub fn normalize_inbound(raw) {
 
 /** Dispatch one Dropbox outbound method. */
 pub fn call(method, args = nil) {
-  let name = __canonical_method(method)
+  const name = __canonical_method(method)
   if name == "artifact.export_request" {
     return artifact_export_request(args ?? {})
   }
@@ -187,11 +187,11 @@ pub fn call(method, args = nil) {
   if contains(DROPBOX_MUTATING_METHODS, name) && !(args?._approved ?? args?.approved ?? false) {
     return __err("approval_required", "dropbox method `" + name + "` requires approval")
   }
-  let cfg = __config(args ?? {})
+  const cfg = __config(args ?? {})
   if is_err(cfg) {
     return cfg
   }
-  let request = __request_for_method(name, args ?? {}, unwrap(cfg))
+  const request = __request_for_method(name, args ?? {}, unwrap(cfg))
   if is_err(request) {
     return request
   }
@@ -200,7 +200,7 @@ pub fn call(method, args = nil) {
 
 /** Build the deterministic HTTP descriptor for a Dropbox method. */
 pub fn request_descriptor(method, args = nil) {
-  let cfg = __config(args ?? {})
+  const cfg = __config(args ?? {})
   if is_err(cfg) {
     return cfg
   }
@@ -209,47 +209,47 @@ pub fn request_descriptor(method, args = nil) {
 
 /** Poll Dropbox list-folder changes and normalize file artifact events. */
 pub fn poll_tick(ctx) {
-  let cfg = __config((ctx?.binding?.config ?? {}) + (ctx?.binding ?? {}) + (ctx ?? {}))
+  const cfg = __config((ctx?.binding?.config ?? {}) + (ctx?.binding ?? {}) + (ctx ?? {}))
   if is_err(cfg) {
     return cfg
   }
-  let binding = ctx?.binding ?? {}
-  let poll = binding?.poll ?? binding?.config?.poll ?? {}
-  let cursor = __text(ctx?.cursor?.cursor ?? poll?.cursor)
-  let args = (poll ?? {}) + {cursor: cursor}
-  let method = if cursor == "" {
+  const binding = ctx?.binding ?? {}
+  const poll = binding?.poll ?? binding?.config?.poll ?? {}
+  const cursor = __text(ctx?.cursor?.cursor ?? poll?.cursor)
+  const args = (poll ?? {}) + {cursor: cursor}
+  const method = if cursor == "" {
     "files.list_folder"
   } else {
     "files.list_folder.continue"
   }
-  let request = __request_for_method(method, args, unwrap(cfg))
+  const request = __request_for_method(method, args, unwrap(cfg))
   if is_err(request) {
     return request
   }
-  let response = __dropbox_request(unwrap(request))
+  const response = __dropbox_request(unwrap(request))
   if is_err(response) {
     return response
   }
-  let payload = unwrap(response)
-  var events = []
-  let state = ctx?.state ?? {}
-  let cache = state?.poll_cache ?? {}
-  var next_cache = cache
+  const payload = unwrap(response)
+  let events = []
+  const state = ctx?.state ?? {}
+  const cache = state?.poll_cache ?? {}
+  let next_cache = cache
   for entry in payload?.entries ?? [] {
-    let tag = __entry_tag(entry)
-    let path_lower = __text(entry?.path_lower ?? entry?.path_display)
+    const tag = __entry_tag(entry)
+    const path_lower = __text(entry?.path_lower ?? entry?.path_display)
     if path_lower == "" {
       continue
     }
-    let removed = tag == "deleted"
-    let changed_at = __text(entry?.server_modified ?? ctx?.tick_at)
-    let fingerprint = json_stringify({tag: tag, entry: entry, changed_at: changed_at})
-    let cache_key = __text(ctx?.binding_id ?? binding?.id ?? "dropbox.poll") + ":" + path_lower
+    const removed = tag == "deleted"
+    const changed_at = __text(entry?.server_modified ?? ctx?.tick_at)
+    const fingerprint = json_stringify({tag: tag, entry: entry, changed_at: changed_at})
+    const cache_key = __text(ctx?.binding_id ?? binding?.id ?? "dropbox.poll") + ":" + path_lower
     if cache.get(cache_key) == fingerprint {
       continue
     }
     next_cache[cache_key] = fingerprint
-    let event_kind = if removed {
+    const event_kind = if removed {
       "dropbox.files.item_removed"
     } else {
       "dropbox.files.item_changed"
@@ -288,23 +288,23 @@ pub fn poll_tick(ctx) {
 
 /** Build a deterministic Dropbox export/download descriptor for an artifact. */
 pub fn artifact_export_request(args = nil) {
-  let path = __artifact_path(args ?? {})
+  const path = __artifact_path(args ?? {})
   if is_err(path) {
     return path
   }
-  let format = __text(args?.format)
-  let name = __text(args?.name ?? __basename(unwrap(path)))
-  let cfg = {
+  const format = __text(args?.format)
+  const name = __text(args?.name ?? __basename(unwrap(path)))
+  const cfg = {
     content_base_url: __strip_trailing_slash(
       __text(args?.content_base_url ?? args?.contentBaseUrl ?? DROPBOX_CONTENT_BASE_URL),
     ),
   }
-  let checked = __validate_content_url(cfg.content_base_url)
+  const checked = __validate_content_url(cfg.content_base_url)
   if is_err(checked) {
     return checked
   }
-  let export = format != ""
-  let url = cfg.content_base_url + if export {
+  const export = format != ""
+  const url = cfg.content_base_url + if export {
     "/files/export"
   } else {
     "/files/download"
@@ -335,18 +335,18 @@ pub fn artifact_export_request(args = nil) {
 
 /** Build a deterministic Dropbox upload descriptor for a local artifact. */
 pub fn artifact_import_request(args = nil) {
-  let path = __artifact_path(args ?? {})
+  const path = __artifact_path(args ?? {})
   if is_err(path) {
     return path
   }
-  let name = __text(args?.name ?? __basename(unwrap(path)))
-  let mode = args?.mode ?? "overwrite"
-  let cfg = {
+  const name = __text(args?.name ?? __basename(unwrap(path)))
+  const mode = args?.mode ?? "overwrite"
+  const cfg = {
     content_base_url: __strip_trailing_slash(
       __text(args?.content_base_url ?? args?.contentBaseUrl ?? DROPBOX_CONTENT_BASE_URL),
     ),
   }
-  let checked = __validate_content_url(cfg.content_base_url)
+  const checked = __validate_content_url(cfg.content_base_url)
   if is_err(checked) {
     return checked
   }
@@ -369,7 +369,7 @@ pub fn artifact_import_request(args = nil) {
 
 fn __request_for_method(method, args, cfg) {
   if method == "files.get_metadata" {
-    let path = __required(args, "path")
+    const path = __required(args, "path")
     if is_err(path) {
       return path
     }
@@ -383,7 +383,7 @@ fn __request_for_method(method, args, cfg) {
     )
   }
   if method == "files.list_folder" {
-    let body = __clean_body(args, __request_deny_keys() + ["cursor"])
+    const body = __clean_body(args, __request_deny_keys() + ["cursor"])
     return Ok(
       __api_request(
         "POST",
@@ -395,7 +395,7 @@ fn __request_for_method(method, args, cfg) {
     )
   }
   if method == "files.list_folder.continue" {
-    let cursor = __required(args, "cursor")
+    const cursor = __required(args, "cursor")
     if is_err(cursor) {
       return cursor
     }
@@ -409,7 +409,7 @@ fn __request_for_method(method, args, cfg) {
     )
   }
   if method == "files.download" {
-    let path = __required(args, "path")
+    const path = __required(args, "path")
     if is_err(path) {
       return path
     }
@@ -418,7 +418,7 @@ fn __request_for_method(method, args, cfg) {
     )
   }
   if method == "files.export" {
-    let path = __required(args, "path")
+    const path = __required(args, "path")
     if is_err(path) {
       return path
     }
@@ -427,11 +427,11 @@ fn __request_for_method(method, args, cfg) {
     )
   }
   if method == "files.upload" {
-    let path = __required(args, "path")
+    const path = __required(args, "path")
     if is_err(path) {
       return path
     }
-    let api_arg = {
+    const api_arg = {
       path: unwrap(path),
       mode: args?.mode ?? "overwrite",
       autorename: args?.autorename ?? false,
@@ -464,7 +464,7 @@ fn __api_request(method, url, body, cfg) {
 }
 
 fn __content_request(method, url, api_arg, body, cfg) {
-  var headers = {Authorization: "Bearer " + cfg.access_token, "Dropbox-API-Arg": json_stringify(api_arg)}
+  let headers = {Authorization: "Bearer " + cfg.access_token, "Dropbox-API-Arg": json_stringify(api_arg)}
   if body != nil {
     headers["Content-Type"] = "application/octet-stream"
   }
@@ -472,17 +472,17 @@ fn __content_request(method, url, api_arg, body, cfg) {
 }
 
 fn __dropbox_request(request) {
-  let response = try {
+  const response = try {
     harness.net.request(request.method, request.url, {headers: request.headers, body: request.body})
   }
   if is_err(response) {
     return __err("transport", to_string(unwrap_err(response)))
   }
-  let http_response = unwrap(response)
-  let result_header = __header(http_response.headers ?? {}, "dropbox-api-result")
+  const http_response = unwrap(response)
+  const result_header = __header(http_response.headers ?? {}, "dropbox-api-result")
   if result_header != nil && __text(result_header) != "" && http_response.status >= 200
     && http_response.status < 300 {
-    let decoded_result = try {
+    const decoded_result = try {
       json_parse(__text(result_header))
     }
     return {
@@ -494,8 +494,8 @@ fn __dropbox_request(request) {
       },
     }
   }
-  let text = http_response.body ?? "{}"
-  let decoded = try {
+  const text = http_response.body ?? "{}"
+  const decoded = try {
     if text == "" {
       {}
     } else {
@@ -508,7 +508,7 @@ fn __dropbox_request(request) {
     }
     return __err("invalid_response", "Dropbox API returned invalid JSON")
   }
-  let payload = unwrap(decoded)
+  const payload = unwrap(decoded)
   if http_response.status < 200 || http_response.status >= 300 {
     return Err(
       {
@@ -524,23 +524,23 @@ fn __dropbox_request(request) {
 }
 
 fn __config(args) {
-  let access_token = __text(args?.access_token ?? args?.token ?? DROPBOX_STATE.ctx?.access_token)
+  const access_token = __text(args?.access_token ?? args?.token ?? DROPBOX_STATE.ctx?.access_token)
   if access_token == "" {
     return __err("missing_access_token", "dropbox connector requires access_token")
   }
-  let api_base_url = __text(
+  const api_base_url = __text(
     args?.api_base_url ?? args?.apiBaseUrl ?? DROPBOX_STATE.ctx?.api_base_url
       ?? DROPBOX_API_BASE_URL,
   )
-  let content_base_url = __text(
+  const content_base_url = __text(
     args?.content_base_url ?? args?.contentBaseUrl ?? DROPBOX_STATE.ctx?.content_base_url
       ?? DROPBOX_CONTENT_BASE_URL,
   )
-  let checked_api = __validate_api_url(api_base_url)
+  const checked_api = __validate_api_url(api_base_url)
   if is_err(checked_api) {
     return checked_api
   }
-  let checked_content = __validate_content_url(content_base_url)
+  const checked_content = __validate_content_url(content_base_url)
   if is_err(checked_content) {
     return checked_content
   }
@@ -554,15 +554,15 @@ fn __config(args) {
 }
 
 fn __verify_dropbox_signature(raw, body_text) {
-  let secret = __text(raw?.app_secret ?? raw?.secret ?? raw?.metadata?.app_secret ?? DROPBOX_STATE.ctx?.app_secret)
+  const secret = __text(raw?.app_secret ?? raw?.secret ?? raw?.metadata?.app_secret ?? DROPBOX_STATE.ctx?.app_secret)
   if secret == "" {
     return Ok({state: "unsigned", scheme: "x-dropbox-signature"})
   }
-  let signature = __text(__header(raw?.headers ?? {}, "x-dropbox-signature"))
+  const signature = __text(__header(raw?.headers ?? {}, "x-dropbox-signature"))
   if signature == "" {
     return __err("missing_signature", "missing x-dropbox-signature header")
   }
-  let expected = hmac_sha256(secret, body_text)
+  const expected = hmac_sha256(secret, body_text)
   if !constant_time_eq(lowercase(expected), lowercase(signature)) {
     return __err("invalid_signature", "x-dropbox-signature did not match the request body")
   }
@@ -612,7 +612,7 @@ fn __request_deny_keys() {
 }
 
 fn __clean_body(args, deny) {
-  var body = {}
+  let body = {}
   for key in (args ?? {}).keys() {
     if contains(deny, key) || starts_with(key, "_") {
       continue
@@ -623,7 +623,7 @@ fn __clean_body(args, deny) {
 }
 
 fn __canonical_method(method) {
-  let text = __text(method)
+  const text = __text(method)
   if text == "export_artifact" {
     return "artifact.export_request"
   }
@@ -637,8 +637,8 @@ fn __canonical_method(method) {
 }
 
 fn __required(args, snake_key) {
-  let camel = __snake_to_camel(snake_key)
-  let value = __text(args?.[snake_key] ?? args?.[camel])
+  const camel = __snake_to_camel(snake_key)
+  const value = __text(args?.[snake_key] ?? args?.[camel])
   if value == "" {
     return __err("missing_" + snake_key, "dropbox method requires `" + snake_key + "`")
   }
@@ -656,12 +656,12 @@ fn __snake_to_camel(value) {
 }
 
 fn __validate_api_url(url) {
-  let text = __text(url)
+  const text = __text(url)
   if !starts_with(lowercase(text), "https://") {
     return __err("invalid_api_base_url", "dropbox api base url must be an absolute https URL")
   }
-  let parsed = url_parse(text)
-  let host = lowercase(__text(parsed?.host))
+  const parsed = url_parse(text)
+  const host = lowercase(__text(parsed?.host))
   if !contains(DROPBOX_ALLOWED_API_HOSTS, host) {
     return __err("disallowed_api_base_url", "dropbox api host `" + host + "` is not in the allowlist")
   }
@@ -669,12 +669,12 @@ fn __validate_api_url(url) {
 }
 
 fn __validate_content_url(url) {
-  let text = __text(url)
+  const text = __text(url)
   if !starts_with(lowercase(text), "https://") {
     return __err("invalid_content_base_url", "dropbox content base url must be an absolute https URL")
   }
-  let parsed = url_parse(text)
-  let host = lowercase(__text(parsed?.host))
+  const parsed = url_parse(text)
+  const host = lowercase(__text(parsed?.host))
   if !contains(DROPBOX_ALLOWED_CONTENT_HOSTS, host) {
     return __err("disallowed_content_base_url", "dropbox content host `" + host + "` is not in the allowlist")
   }
@@ -682,7 +682,7 @@ fn __validate_content_url(url) {
 }
 
 fn __artifact_path(args) {
-  let path = __text(args?.dropbox_path ?? args?.dropboxPath ?? args?.path)
+  const path = __text(args?.dropbox_path ?? args?.dropboxPath ?? args?.path)
   if path == "" {
     return __err("missing_path", "dropbox artifact request requires `path`")
   }
@@ -697,11 +697,11 @@ fn __entry_tag(entry) {
 }
 
 fn __basename(path) {
-  let parts = __text(path).split("/")
+  const parts = __text(path).split("/")
   if len(parts) == 0 {
     return __text(path)
   }
-  let last = __text(parts[len(parts) - 1])
+  const last = __text(parts[len(parts) - 1])
   if last == "" {
     return "dropbox-artifact"
   }
@@ -709,7 +709,7 @@ fn __basename(path) {
 }
 
 fn __format_mime_type(format) {
-  let lower = lowercase(__text(format))
+  const lower = lowercase(__text(format))
   if lower == "pdf" {
     return "application/pdf"
   }
@@ -726,7 +726,7 @@ fn __format_mime_type(format) {
 }
 
 fn __mime_type_from_name(name) {
-  let lower = lowercase(__text(name))
+  const lower = lowercase(__text(name))
   if lower.ends_with(".pdf") {
     return "application/pdf"
   }
@@ -749,7 +749,7 @@ fn __mime_type_from_name(name) {
 }
 
 fn __strip_trailing_slash(value) {
-  let text = __text(value)
+  const text = __text(value)
   if text.ends_with("/") {
     return text[0:len(text) - 1]
   }
@@ -757,7 +757,7 @@ fn __strip_trailing_slash(value) {
 }
 
 fn __header(headers, name) {
-  let wanted = lowercase(name)
+  const wanted = lowercase(name)
   for entry in (headers ?? {}).entries() {
     if lowercase(trim(to_string(entry.key))) == wanted {
       return entry.value

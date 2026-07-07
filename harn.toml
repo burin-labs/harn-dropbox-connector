@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Pure-Harn Dropbox connector for file artifacts, webhooks, polling, and outbound API dispatch."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/burin-labs/harn-dropbox-connector"
-harn = ">=0.9,<0.10"
+harn = ">=0.10,<0.11"
 docs_url = "README.md"
 provenance = "https://github.com/burin-labs/harn-dropbox-connector/releases/tag/v0.1.0"
 
