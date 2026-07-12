@@ -15,14 +15,25 @@ shaped:
 Document rendering and manifest vocabulary stay in `harn-documents`; this
 package owns the external Dropbox boundary.
 
-## Provider
+## Install
+
+```sh
+harn add github.com/burin-labs/harn-dropbox-connector@v0.1.0
+```
+
+For local development, use a path dependency on this checkout. Use the Harn
+CLI version pinned in `.harn-version` for validation.
+
+## Configure
 
 - Provider id: `dropbox`
 - API hosts: `api.dropboxapi.com`, `content.dropboxapi.com`
-- Recommended scopes for artifact workflows:
-  - `files.metadata.read`
-  - `files.content.read`
-  - `files.content.write`
+- Required secrets: `dropbox/access-token`, `dropbox/app-secret`
+- Required OAuth scopes: `files.metadata.read`, `files.content.read`,
+  `files.content.write`
+
+Start browser-based setup with `harn connect dropbox`. Check its status with
+`harn connect status --connector dropbox --json`.
 
 ## Useful methods
 
@@ -35,14 +46,14 @@ package owns the external Dropbox boundary.
 - `artifact.export_request`
 - `artifact.import_request`
 
-## References
+## Provider references
 
 - Dropbox HTTP API:
   <https://www.dropbox.com/developers/documentation/http/documentation>
 - Dropbox webhooks:
   <https://www.dropbox.com/developers/reference/webhooks>
 
-## Validation
+## Validate
 
 ```sh
 harn connector test . --provider dropbox
