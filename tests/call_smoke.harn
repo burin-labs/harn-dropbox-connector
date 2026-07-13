@@ -11,7 +11,10 @@ import { expect, expect_eq } from "./assertions"
 pipeline default() {
   egress_policy({allow: ["api.dropboxapi.com", "content.dropboxapi.com"], default: "deny"})
   shutdown()
-  init({access_token: "secret_access"})
+  const normalized = init("invalid-context")
+  expect_eq(normalized.ctx, {}, "non-dict init context is normalized")
+  const initialized = init({access_token: "secret_access"})
+  expect_eq(initialized.ctx.access_token, "secret_access", "dict init context is retained")
   http_mock_clear()
   const api = "https://api.dropboxapi.com/2"
   const content = "https://content.dropboxapi.com/2"

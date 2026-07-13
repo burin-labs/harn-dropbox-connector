@@ -21,7 +21,15 @@ const DROPBOX_OUTBOUND_METHODS = [
 
 const DROPBOX_MUTATING_METHODS = ["files.upload", "artifact.import_request"]
 
-let DROPBOX_STATE = {initialized: false, active: false, ctx: {}, webhook_bindings: {}, poll_bindings: {}}
+type DropboxConnectorState = {
+  initialized: bool,
+  active: bool,
+  ctx: dict,
+  webhook_bindings: dict,
+  poll_bindings: dict,
+}
+
+let DROPBOX_STATE: DropboxConnectorState = {initialized: false, active: false, ctx: {}, webhook_bindings: {}, poll_bindings: {}}
 
 /** Return this connector's Harn provider id. */
 pub fn provider_id() {
@@ -70,7 +78,15 @@ pub fn payload_schema() {
 
 /** Initialize connector state with orchestrator context. */
 pub fn init(ctx = nil) {
-  DROPBOX_STATE = DROPBOX_STATE + {initialized: true, ctx: ctx ?? {}}
+  DROPBOX_STATE = DROPBOX_STATE
+    + {
+    initialized: true,
+    ctx: if type_of(ctx) == "dict" {
+      ctx
+    } else {
+      {}
+    },
+  }
   return DROPBOX_STATE
 }
 
