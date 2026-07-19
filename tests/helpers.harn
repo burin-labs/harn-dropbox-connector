@@ -16,7 +16,12 @@ pub fn assert_dropbox_interface() {
         path: "/hooks/dropbox",
         secrets: {app_secret: "test-secret"},
       },
-      {id: "dropbox.list_folder", kind: "poll", poll: {path: "/Reports"}, access_token: "secret_access"},
+      {
+        id: "dropbox.list_folder",
+        kind: "poll",
+        poll: {path: "/Reports"},
+        access_token: "secret_access",
+      },
     ],
   )
   require activated.bindings == 2, "activate counts bindings"

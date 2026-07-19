@@ -25,15 +25,21 @@ pipeline default() {
       responses: [
         {
           status: 200,
-          body: "{\".tag\":\"file\",\"id\":\"id:report\",\"name\":\"Report.docx\",\"path_lower\":\"/reports/report.docx\"}",
+          body:
+            "{\".tag\":\"file\",\"id\":\"id:report\",\"name\":\"Report.docx\",\"path_lower\":\"/reports/report.docx\"}",
           headers: {},
         },
         {
           status: 200,
-          body: "{\"entries\":[{\".tag\":\"file\",\"id\":\"id:report\",\"name\":\"Report.docx\",\"path_lower\":\"/reports/report.docx\"}],\"cursor\":\"cursor_1\",\"has_more\":false}",
+          body:
+            "{\"entries\":[{\".tag\":\"file\",\"id\":\"id:report\",\"name\":\"Report.docx\",\"path_lower\":\"/reports/report.docx\"}],\"cursor\":\"cursor_1\",\"has_more\":false}",
           headers: {},
         },
-        {status: 200, body: "{\"entries\":[],\"cursor\":\"cursor_2\",\"has_more\":false}", headers: {}},
+        {
+          status: 200,
+          body: "{\"entries\":[],\"cursor\":\"cursor_2\",\"has_more\":false}",
+          headers: {},
+        },
       ],
     },
   )
@@ -46,19 +52,22 @@ pipeline default() {
           status: 200,
           body: "DOCX-BYTES",
           headers: {
-            "Dropbox-API-Result": "{\".tag\":\"file\",\"id\":\"id:report\",\"name\":\"Report.docx\",\"path_lower\":\"/reports/report.docx\"}",
+            "Dropbox-API-Result":
+              "{\".tag\":\"file\",\"id\":\"id:report\",\"name\":\"Report.docx\",\"path_lower\":\"/reports/report.docx\"}",
           },
         },
         {
           status: 200,
           body: "PDF-BYTES",
           headers: {
-            "Dropbox-API-Result": "{\".tag\":\"file\",\"id\":\"id:report\",\"name\":\"Report.pdf\",\"path_lower\":\"/reports/report.docx\"}",
+            "Dropbox-API-Result":
+              "{\".tag\":\"file\",\"id\":\"id:report\",\"name\":\"Report.pdf\",\"path_lower\":\"/reports/report.docx\"}",
           },
         },
         {
           status: 200,
-          body: "{\".tag\":\"file\",\"id\":\"id:report\",\"name\":\"Report.docx\",\"path_lower\":\"/reports/report.docx\"}",
+          body:
+            "{\".tag\":\"file\",\"id\":\"id:report\",\"name\":\"Report.docx\",\"path_lower\":\"/reports/report.docx\"}",
           headers: {},
         },
       ],
@@ -97,7 +106,9 @@ pipeline default() {
   expect_eq(calls[5].url, content + "/files/upload", "upload URL")
   expect_eq(calls[5].headers.get("content-type"), "application/octet-stream", "upload content type")
   expect_eq(calls[5].body, "doc bytes", "raw upload body is preserved")
-  const export = artifact_export_request({path: "/Reports/Report.docx", format: "pdf", name: "report"})
+  const export = artifact_export_request(
+    {path: "/Reports/Report.docx", format: "pdf", name: "report"},
+  )
   expect_eq(export.kind, "artifact_export", "export descriptor kind")
   expect_eq(export.method, "POST", "export descriptor method")
   expect_eq(export.artifact.mime_type, "application/pdf", "export artifact mime")
@@ -117,7 +128,10 @@ pipeline default() {
   expect_eq(import_request.kind, "artifact_import", "import descriptor kind")
   expect_eq(import_request.method, "POST", "import method")
   expect_eq(import_request.media.uri, "artifact://session/report.docx", "import media uri")
-  const descriptor = request_descriptor("files.export", {access_token: "secret_access", path: "/Reports/Report.docx"})
+  const descriptor = request_descriptor(
+    "files.export",
+    {access_token: "secret_access", path: "/Reports/Report.docx"},
+  )
   expect(!is_err(descriptor), "export request descriptor builds")
   expect_eq(unwrap(descriptor).url, content + "/files/export", "export request URL")
   const bad_host = call(

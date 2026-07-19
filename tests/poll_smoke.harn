@@ -103,7 +103,11 @@ pipeline default() {
   expect_eq(second.cursor.cursor, "cursor_2", "second tick stores cursor")
   const failed = poll_tick(poll_ctx(second.cursor, second.state))
   expect(is_err(failed), "retryable Dropbox failures return Err without advancing local state")
-  expect_eq(unwrap_err(failed).code, "too_many_requests/...", "retry error preserves Dropbox summary")
+  expect_eq(
+    unwrap_err(failed).code,
+    "too_many_requests/...",
+    "retry error preserves Dropbox summary",
+  )
   const retried = poll_tick(poll_ctx(second.cursor, second.state))
   expect_eq(len(retried.events), 1, "retry with same cursor can emit after transient failure")
   expect_eq(retried.events[0].kind, "dropbox.files.item_removed", "removed kind")
