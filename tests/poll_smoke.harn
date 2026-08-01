@@ -44,13 +44,13 @@ fn deleted_entry(path) {
   }
 }
 
-pipeline default() {
-  egress_policy({allow: ["api.dropboxapi.com"], default: "deny"})
-  shutdown()
-  init({access_token: "secret_access"})
-  http_mock_clear()
+pipeline default(harness: Harness) {
+  harness.net.egress_policy({allow: ["api.dropboxapi.com"], default: "deny"})
+  shutdown(harness)
+  init(harness, {access_token: "secret_access"})
+  harness.testing.http_mock_clear()
   const api = "https://api.dropboxapi.com/2"
-  http_mock(
+  harness.testing.http_mock(
     "POST",
     "https://api.dropboxapi.com/*",
     {
@@ -82,7 +82,7 @@ pipeline default() {
       ],
     },
   )
-  const first = poll_tick(poll_ctx())
+  const first = poll_tick(harness, poll_ctx())
   expect_eq(len(first.events), 1, "first tick emits one normalized event")
   expect_eq(first.events[0].kind, "dropbox.files.item_changed", "poll event kind")
   expect_eq(first.events[0].payload.path_lower, "/reports/report 1.docx", "poll path")
@@ -97,29 +97,29 @@ pipeline default() {
     first.state.poll_cache.get("dropbox.list_folder:/reports/report 1.docx") != nil,
     "first tick persists snapshot",
   )
-  const second = poll_tick(poll_ctx(first.cursor, first.state))
+  const second = poll_tick(harness, poll_ctx(first.cursor, first.state))
   expect_eq(len(second.events), 1, "second tick emits one changed item")
   expect_eq(second.events[0].payload.file_id, "id_report_2", "second file id")
   expect_eq(second.cursor.cursor, "cursor_2", "second tick stores cursor")
-  const failed = poll_tick(poll_ctx(second.cursor, second.state))
+  const failed = poll_tick(harness, poll_ctx(second.cursor, second.state))
   expect(is_err(failed), "retryable Dropbox failures return Err without advancing local state")
   expect_eq(
     unwrap_err(failed).code,
     "too_many_requests/...",
     "retry error preserves Dropbox summary",
   )
-  const retried = poll_tick(poll_ctx(second.cursor, second.state))
+  const retried = poll_tick(harness, poll_ctx(second.cursor, second.state))
   expect_eq(len(retried.events), 1, "retry with same cursor can emit after transient failure")
   expect_eq(retried.events[0].kind, "dropbox.files.item_removed", "removed kind")
   expect_eq(retried.events[0].payload.removed, true, "removed payload")
-  const calls = http_mock_calls({include_sensitive: true})
+  const calls = harness.testing.http_mock_calls({include_sensitive: true})
   expect_eq(len(calls), 4, "one Dropbox request per tick")
   expect_eq(calls[0].url, api + "/files/list_folder", "first list URL")
   expect_eq(calls[1].url, api + "/files/list_folder/continue", "continue URL")
   expect(calls[1].body.contains("\"cursor\":\"cursor_1\""), "continue cursor")
   expect(calls[3].body.contains("\"cursor\":\"cursor_2\""), "retry cursor")
-  http_mock_clear()
-  http_mock(
+  harness.testing.http_mock_clear()
+  harness.testing.http_mock(
     "POST",
     api + "/files/list_folder",
     {
@@ -132,7 +132,7 @@ pipeline default() {
       headers: {},
     },
   )
-  const duplicate = poll_tick(poll_ctx(nil, first.state))
+  const duplicate = poll_tick(harness, poll_ctx(nil, first.state))
   expect_eq(len(duplicate.events), 0, "persisted state dedupes identical item snapshot")
-  shutdown()
+  shutdown(harness)
 }
