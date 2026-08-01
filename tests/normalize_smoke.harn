@@ -2,10 +2,10 @@ import { init, normalize_inbound, shutdown } from "../src/lib"
 import { expect, expect_eq } from "./assertions"
 import { assert_dropbox_interface, dropbox_webhook_body } from "./helpers"
 
-pipeline default() {
+pipeline default(harness: Harness) {
   const secret = "test-secret"
-  assert_dropbox_interface()
-  const challenge = normalize_inbound({query: {challenge: "dropbox-challenge"}})
+  assert_dropbox_interface(harness)
+  const challenge = normalize_inbound(harness, {query: {challenge: "dropbox-challenge"}})
   expect_eq(challenge.type, "response", "challenge returns response envelope")
   expect_eq(challenge.response.status, 200, "challenge status")
   expect_eq(challenge.response.body, "dropbox-challenge", "challenge body")
@@ -17,6 +17,7 @@ pipeline default() {
   const body = dropbox_webhook_body()
   const signature = hmac_sha256(secret, body)
   const event = normalize_inbound(
+    harness,
     {app_secret: secret, body_text: body, headers: {"x-dropbox-signature": signature}},
   )
   expect_eq(event.type, "event", "Dropbox webhook envelope type")
@@ -26,24 +27,26 @@ pipeline default() {
   expect_eq(event.event.payload.account_id, "dbid:acct_123", "account id")
   expect(event.event.dedupe_key.contains("dbid:acct_123"), "dedupe key includes account")
   expect_eq(event.event.source_refs[0].kind, "account", "source ref kind")
-  shutdown()
-  const unsigned = normalize_inbound({body: dropbox_webhook_body(["dbid:acct_456"])})
+  shutdown(harness)
+  const unsigned = normalize_inbound(harness, {body: dropbox_webhook_body(["dbid:acct_456"])})
   expect_eq(
     unsigned.type,
     "event",
     "unsigned webhook can be accepted when no app secret configured",
   )
   expect_eq(unsigned.event.signature_status.state, "unsigned", "unsigned state")
-  init({app_secret: secret})
+  init(harness, {app_secret: secret})
   const bad_signature = normalize_inbound(
+    harness,
     {body_text: body, headers: {"x-dropbox-signature": hmac_sha256("wrong", body)}},
   )
   expect_eq(bad_signature.type, "reject", "wrong signature rejects")
   expect_eq(bad_signature.reject.status, 401, "wrong signature status")
   const missing = normalize_inbound(
+    harness,
     {body_text: "{}", headers: {"x-dropbox-signature": hmac_sha256(secret, "{}")}},
   )
   expect_eq(missing.type, "reject", "missing accounts rejects")
   expect_eq(missing.reject.status, 400, "missing accounts status")
-  shutdown()
+  shutdown(harness)
 }

@@ -8,17 +8,19 @@ import {
 } from "../src/lib"
 import { expect, expect_eq } from "./assertions"
 
-pipeline default() {
-  egress_policy({allow: ["api.dropboxapi.com", "content.dropboxapi.com"], default: "deny"})
-  shutdown()
-  const normalized = init("invalid-context")
+pipeline default(harness: Harness) {
+  harness.net.egress_policy(
+    {allow: ["api.dropboxapi.com", "content.dropboxapi.com"], default: "deny"},
+  )
+  shutdown(harness)
+  const normalized = init(harness, "invalid-context")
   expect_eq(normalized.ctx, {}, "non-dict init context is normalized")
-  const initialized = init({access_token: "secret_access"})
+  const initialized = init(harness, {access_token: "secret_access"})
   expect_eq(initialized.ctx.access_token, "secret_access", "dict init context is retained")
-  http_mock_clear()
+  harness.testing.http_mock_clear()
   const api = "https://api.dropboxapi.com/2"
   const content = "https://content.dropboxapi.com/2"
-  http_mock(
+  harness.testing.http_mock(
     "*",
     "https://api.dropboxapi.com/*",
     {
@@ -43,7 +45,7 @@ pipeline default() {
       ],
     },
   )
-  http_mock(
+  harness.testing.http_mock(
     "*",
     "https://content.dropboxapi.com/*",
     {
@@ -73,20 +75,28 @@ pipeline default() {
       ],
     },
   )
-  const file = call("files.get_metadata", {path: "/Reports/Report.docx"})
+  const file = call(harness, "files.get_metadata", {path: "/Reports/Report.docx"})
   expect_eq(file.id, "id:report", "metadata response")
-  call("files.list_folder", {path: "/Reports", recursive: true, limit: 10})
-  call("files.list_folder.continue", {cursor: "cursor_1"})
-  const downloaded = call("files.download", {path: "/Reports/Report.docx"})
+  call(harness, "files.list_folder", {path: "/Reports", recursive: true, limit: 10})
+  call(harness, "files.list_folder.continue", {cursor: "cursor_1"})
+  const downloaded = call(harness, "files.download", {path: "/Reports/Report.docx"})
   expect_eq(downloaded.bytes, "DOCX-BYTES", "download bytes response")
   expect_eq(downloaded.metadata.id, "id:report", "download metadata")
-  const exported = call("files.export", {path: "/Reports/Report.docx"})
+  const exported = call(harness, "files.export", {path: "/Reports/Report.docx"})
   expect_eq(exported.bytes, "PDF-BYTES", "export bytes response")
-  const upload_rejected = call("files.upload", {path: "/Reports/Report.docx", content: "doc bytes"})
+  const upload_rejected = call(
+    harness,
+    "files.upload",
+    {path: "/Reports/Report.docx", content: "doc bytes"},
+  )
   expect(is_err(upload_rejected), "mutating Dropbox upload requires approval")
   expect_eq(unwrap_err(upload_rejected).code, "approval_required", "approval code")
-  call("files.upload", {path: "/Reports/Report.docx", content: "doc bytes", _approved: true})
-  const calls = http_mock_calls({include_sensitive: true})
+  call(
+    harness,
+    "files.upload",
+    {path: "/Reports/Report.docx", content: "doc bytes", _approved: true},
+  )
+  const calls = harness.testing.http_mock_calls({include_sensitive: true})
   expect_eq(len(calls), 6, "all expected outbound methods dispatched")
   expect_eq(calls[0].method, "POST", "metadata uses POST")
   expect_eq(calls[0].url, api + "/files/get_metadata", "metadata URL")
@@ -135,6 +145,7 @@ pipeline default() {
   expect(!is_err(descriptor), "export request descriptor builds")
   expect_eq(unwrap(descriptor).url, content + "/files/export", "export request URL")
   const bad_host = call(
+    harness,
     "files.get_metadata",
     {
       path: "/Reports/Report.docx",
@@ -144,8 +155,8 @@ pipeline default() {
   )
   expect(is_err(bad_host), "disallowed api_base_url rejected")
   expect_eq(unwrap_err(bad_host).code, "disallowed_api_base_url", "disallowed host code")
-  http_mock_clear()
-  shutdown()
+  harness.testing.http_mock_clear()
+  shutdown(harness)
 }
 
 fn __text(value) {
