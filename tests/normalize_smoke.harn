@@ -2,7 +2,7 @@ import { init, normalize_inbound, shutdown } from "../src/lib"
 import { expect, expect_eq } from "./assertions"
 import { assert_dropbox_interface, dropbox_webhook_body } from "./helpers"
 
-pipeline default(harness: Harness) {
+pipeline test_normalize_smoke(harness: Harness) {
   const secret = "test-secret"
   assert_dropbox_interface(harness)
   const challenge = normalize_inbound(harness, {query: {challenge: "dropbox-challenge"}})
