@@ -44,7 +44,7 @@ fn deleted_entry(path) {
   }
 }
 
-pipeline default(harness: Harness) {
+pipeline test_poll_smoke(harness: Harness) {
   harness.net.egress_policy({allow: ["api.dropboxapi.com"], default: "deny"})
   shutdown(harness)
   init(harness, {access_token: "secret_access"})
