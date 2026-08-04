@@ -544,9 +544,9 @@ fn __content_request(method, url, api_arg, body, cfg) {
   return {method: method, url: url, headers: headers, body: body}
 }
 
-fn __dropbox_request(harness: HarnessNet, request) {
+fn __dropbox_request(net: HarnessNet, request) {
   const response = try {
-    harness.request(request.method, request.url, {headers: request.headers, body: request.body})
+    net.request(request.method, request.url, {headers: request.headers, body: request.body})
   }
   if is_err(response) {
     return __err("transport", to_string(unwrap_err(response)))
