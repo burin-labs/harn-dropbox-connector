@@ -86,13 +86,13 @@ pub fn payload_schema() {
 pub fn init(harness: Harness, ctx = nil) {
   DROPBOX_STATE = DROPBOX_STATE
     + {
-    initialized: true,
-    ctx: if type_of(ctx) == "dict" {
-      ctx
-    } else {
-      {}
-    },
-  }
+      initialized: true,
+      ctx: if type_of(ctx) == "dict" {
+        ctx
+      } else {
+        {}
+      },
+    }
   return DROPBOX_STATE
 }
 
@@ -105,9 +105,7 @@ pub fn activate(harness: Harness, bindings = []) {
     const binding_id = __text(
       binding?.binding_id ?? binding?.id
         ?? ("binding-"
-        + to_string(
-        len(webhook_bindings.keys()) + len(poll_bindings.keys()),
-      )),
+          + to_string(len(webhook_bindings.keys()) + len(poll_bindings.keys()))),
     )
     const kind = __text(binding?.kind ?? "webhook")
     if kind == "webhook" {
@@ -129,11 +127,7 @@ pub fn activate(harness: Harness, bindings = []) {
     }
   }
   DROPBOX_STATE = DROPBOX_STATE
-    + {
-    active: true,
-    webhook_bindings: webhook_bindings,
-    poll_bindings: poll_bindings,
-  }
+    + {active: true, webhook_bindings: webhook_bindings, poll_bindings: poll_bindings}
   return {
     provider: DROPBOX_PROVIDER_ID,
     bindings: len(webhook_bindings.keys()) + len(poll_bindings.keys()),
@@ -200,26 +194,26 @@ pub fn normalize_inbound(harness: Harness, raw) {
     const event = "dropbox.list_folder.account_changed"
     events = events
       + [
-      {
-        provider: DROPBOX_PROVIDER_ID,
-        kind: event,
-        dedupe_key: __event_dedupe_key(
-          event,
-          account,
-          __text(payload?.delta?.cursor ?? raw?.delivery_id),
-        ),
-        payload: {
+        {
           provider: DROPBOX_PROVIDER_ID,
-          event: event,
-          event_type: event,
-          account_id: account,
-          raw: payload,
+          kind: event,
+          dedupe_key: __event_dedupe_key(
+            event,
+            account,
+            __text(payload?.delta?.cursor ?? raw?.delivery_id),
+          ),
+          payload: {
+            provider: DROPBOX_PROVIDER_ID,
+            event: event,
+            event_type: event,
+            account_id: account,
+            raw: payload,
+          },
+          source: "dropbox.webhook",
+          signature_status: unwrap(verified),
+          source_refs: [__account_ref(account)],
         },
-        source: "dropbox.webhook",
-        signature_status: unwrap(verified),
-        source_refs: [__account_ref(account)],
-      },
-    ]
+      ]
   }
   if len(events) == 1 {
     return {type: "event", event: events[0]}
@@ -308,28 +302,28 @@ pub fn poll_tick(harness: Harness, ctx) {
     }
     events = events
       + [
-      {
-        provider: DROPBOX_PROVIDER_ID,
-        kind: event_kind,
-        occurred_at: changed_at,
-        dedupe_key: "dropbox:" + event_kind + ":" + path_lower + ":" + changed_at,
-        payload: {
+        {
           provider: DROPBOX_PROVIDER_ID,
-          event: event_kind,
-          event_type: event_kind,
-          file_id: entry?.id,
-          path_lower: path_lower,
-          path_display: entry?.path_display,
-          name: entry?.name,
-          mime_type: entry?.mime_type ?? __mime_type_from_name(entry?.name),
-          rev: entry?.rev,
-          size: entry?.size,
-          removed: removed,
-          raw: entry,
+          kind: event_kind,
+          occurred_at: changed_at,
+          dedupe_key: "dropbox:" + event_kind + ":" + path_lower + ":" + changed_at,
+          payload: {
+            provider: DROPBOX_PROVIDER_ID,
+            event: event_kind,
+            event_type: event_kind,
+            file_id: entry?.id,
+            path_lower: path_lower,
+            path_display: entry?.path_display,
+            name: entry?.name,
+            mime_type: entry?.mime_type ?? __mime_type_from_name(entry?.name),
+            rev: entry?.rev,
+            size: entry?.size,
+            removed: removed,
+            raw: entry,
+          },
+          source_refs: [__file_ref(path_lower, entry)],
         },
-        source_refs: [__file_ref(path_lower, entry)],
-      },
-    ]
+      ]
   }
   return {
     events: events,
@@ -358,10 +352,10 @@ pub fn artifact_export_request(args = nil) {
   const export = format != ""
   const url = cfg.content_base_url
     + if export {
-    "/files/export"
-  } else {
-    "/files/download"
-  }
+      "/files/export"
+    } else {
+      "/files/download"
+    }
   return {
     provider: DROPBOX_PROVIDER_ID,
     kind: "artifact_export",
@@ -554,9 +548,8 @@ fn __dropbox_request(net: HarnessNet, request) {
   const http_response = unwrap(response)
   const result_header = __header(http_response.headers ?? {}, "dropbox-api-result")
   if result_header != nil && __text(result_header) != "" && http_response.status >= 200
-    && http_response
-    .status
-    < 300 {
+    && http_response.status
+      < 300 {
     const decoded_result = try {
       json_parse(__text(result_header))
     }
@@ -591,9 +584,7 @@ fn __dropbox_request(net: HarnessNet, request) {
         code: payload?.error_summary ?? (payload?.error ?? {}).get(".tag") ?? "dropbox_error",
         message: payload?.error_summary
           ?? ("Dropbox API request failed with status "
-          + to_string(
-          http_response.status,
-        )),
+            + to_string(http_response.status)),
         provider: DROPBOX_PROVIDER_ID,
       },
     )
