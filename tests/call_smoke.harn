@@ -159,7 +159,7 @@ pipeline test_call_smoke(harness: Harness) {
   shutdown(harness)
 }
 
-fn __text(value) {
+fn __text(value: any) {
   if value == nil {
     return ""
   }

@@ -1,7 +1,7 @@
 import { init, poll_tick, shutdown } from "../src/lib"
 import { expect, expect_eq } from "./assertions"
 
-fn poll_ctx(cursor = nil, state = nil, extra = nil) {
+fn poll_ctx(cursor: any = nil, state: any = nil, extra: any = nil) {
   return {
     provider_id: "dropbox",
     binding_id: "dropbox.list_folder",
@@ -18,11 +18,11 @@ fn poll_ctx(cursor = nil, state = nil, extra = nil) {
     + (extra ?? {})
 }
 
-fn list_body(entries, cursor, has_more = false) {
+fn list_body(entries: any, cursor: any, has_more: any = false) {
   return json_stringify({entries: entries, cursor: cursor, has_more: has_more})
 }
 
-fn file_entry(id, path, modified) {
+fn file_entry(id: any, path: any, modified: any) {
   return {
     ".tag": "file",
     id: id,
@@ -35,7 +35,7 @@ fn file_entry(id, path, modified) {
   }
 }
 
-fn deleted_entry(path) {
+fn deleted_entry(path: any) {
   return {
     ".tag": "deleted",
     name: path.split("/")[len(path.split("/")) - 1],
