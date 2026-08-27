@@ -31,6 +31,6 @@ pub fn assert_dropbox_interface(harness: Harness) {
 }
 
 /** Build a Dropbox list-folder webhook body. */
-pub fn dropbox_webhook_body(accounts = nil) {
+pub fn dropbox_webhook_body(accounts: any = nil) {
   return json_stringify({list_folder: {accounts: accounts ?? ["dbid:acct_123"]}})
 }
