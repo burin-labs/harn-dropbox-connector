@@ -1,6 +1,6 @@
 import { init, normalize_inbound, shutdown } from "../src/lib"
-import { expect, expect_eq } from "./assertions"
-import { assert_dropbox_interface, dropbox_webhook_body } from "./helpers"
+import { expect, expect_eq } from "../testdata/assertions"
+import { assert_dropbox_interface, dropbox_webhook_body } from "../testdata/helpers"
 
 pipeline test_normalize_smoke(harness: Harness) {
   const secret = "test-secret"
